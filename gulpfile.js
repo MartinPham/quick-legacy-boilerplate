@@ -13,6 +13,8 @@ gulp
 */
 
 
+const argv = process.argv.slice(2);
+
 const gulp = require('gulp');
 const concat = require('gulp-concat');
 const uglify = require('gulp-uglify');
@@ -23,11 +25,20 @@ const sass = require('gulp-sass');
 sass.compiler = require('node-sass');
 const babel = require('gulp-babel');
 const browserSync = require('browser-sync').create();
-// const browserSyncSSI = require('browsersync-ssi');
 const notifier = require('node-notifier');
+const nodeSSI = require('node-ssi');
+const inlineCss = require('inline-css');
+const fs = require('fs');
 
+const buildDirectory = 'build';
 
-
+const ssi = new nodeSSI({
+    baseDir: './',
+    encoding: 'utf-8',
+    payload: {
+        v: 5
+    }
+});
 
 gulp.task('js', function () {
   return gulp.src([
@@ -49,7 +60,7 @@ gulp.task('js', function () {
 	.pipe(uglify({
 	  preserveComments: "some"
 	}))
-	.pipe(gulp.dest('build')) // the destination folder
+	.pipe(gulp.dest(buildDirectory)) // the destination folder
 	.pipe(notify({
 	  	message: 'Finished processing JS',
 		urgency: 'low'
@@ -77,7 +88,7 @@ gulp.task('scss', function () {
 	  browsers: ['last 8 versions'],
 	  cascade: false
 	}))
-	.pipe(gulp.dest('build')) // the destination folder
+	.pipe(gulp.dest(buildDirectory)) // the destination folder
 	.pipe(notify({
 	  	message: 'Finished processing SCSS',
 		urgency: 'low'
@@ -85,10 +96,18 @@ gulp.task('scss', function () {
 	.pipe(browserSync.stream());
 });
 
+gulp.task('html', function () {
+  return gulp.src([
+		"*.html",  
+		"includes/*.html",  
+	])
+	.pipe(browserSync.stream());
+});
+
 gulp.task('watch', function () {
   	gulp.watch('js/**/*.js', ['js']);
   	gulp.watch('scss/**/*.scss', ['scss']);
-  	gulp.watch(['./**/*.html']).on('change', browserSync.reload);
+  	gulp.watch(['*.html', 'includes/*.html'], ['html']);
 });
 
 gulp.task('browser-sync', function() {
@@ -96,21 +115,38 @@ gulp.task('browser-sync', function() {
         server: {
             baseDir: "./",
             middleware: [
-	            function (req, res, next) { // SSI
+	            function (req, res, next) { // SSI & Inline
 	            	if(/^(.*)\.html$/.test(req.url))
-	            	{
-		            	const nodeSSI = require('node-ssi');
-		            	const ssi = new nodeSSI({
-					        baseDir: './',
-					        encoding: 'utf-8',
-					        payload: {
-					            v: 5
-					        }
-					    });
+	            	{	
+						ssi.compileFile(__dirname + req.url, {}, function(err, content) {
+							if(argv.indexOf('--inline-css') > -1)
+	            			{
+						    	inlineCss(content, {
+				        			url: 'file://' + __dirname + '/'
+				        		})
+		    					.then(function(html) { 
+		    						res.end(html);
 
-					    ssi.compileFile(__dirname + req.url, {}, function(err, content){
-					    	res.end(content)
-					    });
+		    						if(argv.indexOf('--build-html') > -1)
+	            					{
+	            						fs.writeFile(
+	            							__dirname + '/' + buildDirectory + req.url,
+	            							html,
+	            							'utf8',
+	            							function()
+	            							{
+	            								notifier.notify({
+												  	message: 'Finished building HTML',
+												  	urgency: 'low'
+												});
+	            							}
+	            						);
+	            					}
+		    					});
+			            	} else {
+			            		res.end(content);
+			            	}
+						});
 	            	} else {
 	            		next();
 	            	}
@@ -123,7 +159,7 @@ gulp.task('browser-sync', function() {
 });
 
 
-gulp.task('default', ['js', 'scss', 'watch', 'browser-sync']);
+gulp.task('default', ['js', 'scss', 'html', 'watch', 'browser-sync']);
 
 
 
