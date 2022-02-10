@@ -11,7 +11,7 @@
     "gulp-notify": "^2.2.0",
     "gulp-sass": "^4.0.2",
     "gulp-uglify": "^1.5.1",
-    "node-sass": "^4.11.0",
+    "node-sass": "^7.0.0",
     "node-ssi": "^0.3.2",
     "inline-css": "^2.4.1"
   }
